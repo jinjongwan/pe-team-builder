@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="반별 학생 명단을 저장하고 능력치·회피·남녀 균형을 고려해 체육수업 팀을 랜덤 편성하는 교사용 도구">
+<style>html{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif;background:#f3f5f4}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>체육수업 팀 편성</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=Do+Hyeon&display=swap">
+<style>
+/* Layout: 교사 화면은 좌(명단) / 우(편성) 2단, 학생 화면은 팀 카드만 전면에 크게. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --surface2:#e9edeb; --line:#d3d9d6;
+  --fg:#17211d; --muted:#5f6d67; --accent:#0f7a5c; --accent-fg:#ffffff; --accent-soft:#d7eee6;
+  --danger:#b3261e; --danger-soft:#f7dcd9; --warn:#946200; --warn-soft:#f5e8c8;
+  --t1:#2563eb;--t2:#dc2626;--t3:#16a34a;--t4:#d97706;--t5:#7c3aed;--t6:#0891b2;--t7:#db2777;--t8:#65a30d;--t9:#475569;--t10:#9333ea;--t11:#0d9488;--t12:#ea580c;
+  --font-body:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --font-display:"Do Hyeon","Noto Sans KR",system-ui,sans-serif;
+  --radius:10px; --shadow:0 1px 2px rgba(23,33,29,.06),0 4px 14px rgba(23,33,29,.06);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12181a; --surface:#1b2326; --surface2:#242e31; --line:#34413f;
+  --fg:#e7ece9; --muted:#9aa8a2; --accent:#3fc59a; --accent-fg:#0c1a15; --accent-soft:#183a30;
+  --danger:#f28b82; --danger-soft:#4a2320; --warn:#f0c15a; --warn-soft:#3f3315;
+  --t1:#60a5fa;--t2:#f87171;--t3:#4ade80;--t4:#fbbf24;--t5:#a78bfa;--t6:#22d3ee;--t7:#f472b6;--t8:#a3e635;--t9:#94a3b8;--t10:#c084fc;--t11:#2dd4bf;--t12:#fb923c;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181a; --surface:#1b2326; --surface2:#242e31; --line:#34413f;
+  --fg:#e7ece9; --muted:#9aa8a2; --accent:#3fc59a; --accent-fg:#0c1a15; --accent-soft:#183a30;
+  --danger:#f28b82; --danger-soft:#4a2320; --warn:#f0c15a; --warn-soft:#3f3315;
+  --t1:#60a5fa;--t2:#f87171;--t3:#4ade80;--t4:#fbbf24;--t5:#a78bfa;--t6:#22d3ee;--t7:#f472b6;--t8:#a3e635;--t9:#94a3b8;--t10:#c084fc;--t11:#2dd4bf;--t12:#fb923c;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:14px;line-height:1.5}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;text-wrap:balance}
+.num{font-variant-numeric:tabular-nums}
+
+/* ── 상단 바 ── */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:12px;padding:10px 16px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand h1{font-family:var(--font-display);font-size:22px;letter-spacing:.5px;color:var(--accent)}
+.brand .sub{color:var(--muted);font-size:12px}
+.classbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}
+.classtab{border:1px solid var(--line);background:var(--surface2);border-radius:999px;padding:5px 12px;font-weight:500}
+.classtab.on{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.classtab.add{background:transparent;border-style:dashed;color:var(--muted)}
+.status{font-size:12px;color:var(--muted);white-space:nowrap}
+.status.saving{color:var(--warn)} .status.err{color:var(--danger)}
+
+/* ── 버튼 ── */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:7px 12px;font-weight:500;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.05)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.sm{padding:4px 8px;font-size:12px;border-radius:6px}
+.btn.big{padding:12px 20px;font-size:16px;border-radius:10px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+
+/* ── 본문 ── */
+.wrap{padding-block:16px 40px;padding-inline:16px;max-width:1400px;margin:0 auto}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:16px}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);min-width:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.panel-head h2{font-size:15px;font-weight:700}
+.panel-head .tools{display:flex;gap:6px;flex-wrap:wrap}
+.panel-body{padding:12px 14px}
+.hint{color:var(--muted);font-size:12px}
+
+/* 명단 표 */
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr.absent td{opacity:.45}
+td input[type=text],td input[type=number],td select{width:100%;border:1px solid transparent;background:transparent;border-radius:6px;padding:4px 6px}
+td input:hover,td select:hover{border-color:var(--line);background:var(--surface2)}
+td input:focus,td select:focus{border-color:var(--accent);background:var(--surface)}
+.w-num{width:52px}.w-name{min-width:90px}.w-sex{width:64px}.w-abil{width:130px}.w-fix{width:74px}.w-att{width:44px}.w-del{width:36px}
+.stars{display:inline-flex;gap:1px}
+.stars button{border:0;background:transparent;padding:0 1px;font-size:16px;line-height:1;color:var(--line)}
+.stars button.on{color:var(--warn)}
+.stars button:hover{transform:scale(1.15)}
+.iconbtn{border:0;background:transparent;color:var(--muted);padding:2px 6px;border-radius:6px;font-size:14px}
+.iconbtn:hover{background:var(--danger-soft);color:var(--danger)}
+.chk{width:16px;height:16px;accent-color:var(--accent)}
+
+/* 회피 */
+.avoidlist{display:flex;flex-wrap:wrap;gap:6px}
+.pair{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;background:var(--surface2);font-size:13px}
+.pair .x{border:0;background:transparent;color:var(--muted);padding:0 4px;border-radius:50%}
+.pair .x:hover{color:var(--danger)}
+.pairform{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.pairform select{border:1px solid var(--line);border-radius:8px;padding:6px 8px;background:var(--surface);min-width:120px}
+
+/* 편성 설정 */
+.settings{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:12px;color:var(--muted);letter-spacing:.3px}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.stepper button{border:0;background:var(--surface2);width:36px;height:36px;font-size:18px}
+.stepper input{width:56px;text-align:center;border:0;background:var(--surface);height:36px;font-size:16px;font-weight:700}
+.stepper input::-webkit-inner-spin-button{-webkit-appearance:none}
+.field select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);height:36px}
+.sizeinfo{font-size:12px;color:var(--muted)}
+.modehelp{font-size:12px;color:var(--muted);margin-top:8px;padding:8px 10px;background:var(--surface2);border-radius:8px}
+
+/* 팀 카드 */
+.teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-top:14px}
+.team{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;background:var(--surface);min-width:0}
+.team-head{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;color:#fff;font-weight:700}
+.team-head .tname{font-family:var(--font-display);font-size:18px;letter-spacing:.5px;background:transparent;border:0;color:#fff;width:100%;min-width:0;padding:0}
+.team-head .tname:focus{outline:1px dashed rgba(255,255,255,.8);outline-offset:2px}
+.team-meta{font-size:12px;opacity:.9;white-space:nowrap}
+.team ul{list-style:none;margin:0;padding:6px 8px;display:flex;flex-direction:column;gap:3px}
+.team li{display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px}
+.team li:hover{background:var(--surface2)}
+.team li .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team li .ab{font-size:11px;color:var(--muted)}
+.team li .cap{font-size:11px;color:var(--accent);font-weight:700}
+.team li{cursor:grab}
+.team li.dragging{opacity:.4}
+.team.dropok{outline:2px dashed var(--accent);outline-offset:-2px;background:var(--accent-soft)}
+.team li .mv{border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:12px;padding:0 6px;border-radius:6px;line-height:20px}
+.team li .mv:hover{color:var(--accent);border-color:var(--accent)}
+.team li select.mvsel{border:1px solid var(--line);border-radius:6px;padding:1px 4px;font-size:12px;background:var(--surface)}
+.badge{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;background:var(--surface2);color:var(--muted)}
+.badge.ok{background:var(--accent-soft);color:var(--accent)}
+.badge.bad{background:var(--danger-soft);color:var(--danger)}
+.empty{padding:30px 14px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--fg);margin-bottom:4px}
+
+/* 결과 요약줄 */
+.resultbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px}
+
+/* ── 학생 화면 ── */
+.student{position:fixed;inset:0;z-index:50;background:var(--bg);overflow:auto;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.student-top{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;gap:12px}
+.student-top h2{font-family:var(--font-display);font-size:clamp(24px,3.5vw,40px);color:var(--fg)}
+.student-top h2 span{color:var(--accent)}
+.sgrid{display:grid;gap:18px;padding:0 24px 24px;grid-template-columns:repeat(var(--cols,4),minmax(0,1fr))}
+@media (max-width:700px){.sgrid{grid-template-columns:1fr 1fr}}
+.steam{border-radius:16px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow);border:1px solid var(--line)}
+.steam-head{padding:12px 16px;color:#fff;font-family:var(--font-display);font-size:clamp(22px,2.6vw,34px);letter-spacing:1px;display:flex;justify-content:space-between;align-items:baseline}
+.steam-head small{font-family:var(--font-body);font-size:14px;opacity:.9}
+.steam ol{list-style:none;margin:0;padding:12px 16px;display:flex;flex-direction:column;gap:6px}
+.steam li{font-size:clamp(18px,2vw,26px);font-weight:500;display:flex;gap:8px;align-items:baseline}
+.steam li .n{color:var(--muted);font-size:.7em;width:2ch;text-align:right}
+.steam li.cap::after{content:"팀장";font-size:.6em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:0 6px;margin-left:4px}
+
+/* 토스트 / 모달 */
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;font-size:13px;z-index:100;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:90;display:flex;align-items:center;justify-content:center;padding:16px}
+.modal .box{background:var(--surface);border-radius:12px;padding:18px;max-width:420px;width:100%;box-shadow:var(--shadow)}
+.modal h3{font-size:16px;margin-bottom:8px}
+.modal p{margin:0 0 14px;color:var(--muted)}
+.modal .row{display:flex;gap:8px;justify-content:flex-end}
+.modal input[type=text]{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface);margin-bottom:14px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand"><h1>팀 편성</h1><span class="sub">체육수업</span></div>
+  <nav class="classbar" id="classbar" aria-label="반 선택"></nav>
+  <span class="status" id="status">불러오는 중…</span>
+  <span class="status" id="authWho" hidden></span>
+  <button class="btn" id="btnAuth">Google 로그인</button>
+  <button class="btn primary" id="btnStudent" title="능력치·회피 등 교사 정보를 숨긴 큰 화면">학생 화면</button>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+    <!-- 왼쪽: 학생 명단 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>학생 명단 <span class="badge" id="cntBadge">0명</span></h2>
+        <div class="tools">
+          <button class="btn sm" id="btnImport">엑셀 업로드</button>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
+          <button class="btn sm" id="btnTemplate">양식 받기</button>
+          <button class="btn sm" id="btnExport">엑셀 내보내기</button>
+          <button class="btn sm" id="btnAddStu">+ 학생</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <p class="hint">능력치(★1~5)와 회피 설정은 교사에게만 보이며 학생 화면에서는 숨겨집니다. 결석 체크를 풀면 배치에서 제외됩니다.</p>
+        <div class="tablewrap" id="rosterWrap"></div>
+        <div class="tools" style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn sm" id="btnRename">반 이름 변경</button>
+          <button class="btn sm danger" id="btnDelClass">반 삭제</button>
+          <span style="flex:1"></span>
+          <button class="btn sm" id="btnBackup" title="모든 반의 데이터를 JSON 파일로 저장">전체 백업</button>
+          <button class="btn sm" id="btnRestore" title="백업 JSON 파일로 복원">복원</button>
+          <input type="file" id="restoreInput" accept=".json,application/json" hidden>
+        </div>
+      </div>
+    </section>
+
+    <!-- 오른쪽: 편성 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>팀 편성</h2>
+        <div class="tools"><button class="btn sm" id="btnClearTeams">결과 지우기</button></div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="field"><label for="teamCount">팀 수</label>
+            <div class="stepper"><button id="tcMinus" aria-label="팀 수 줄이기">−</button><input type="number" id="teamCount" min="2" max="12" value="4"><button id="tcPlus" aria-label="팀 수 늘리기">+</button></div>
+          </div>
+          <div class="field"><label for="mode">배치 방식</label>
+            <select id="mode">
+              <option value="random">완전 랜덤</option>
+              <option value="ability" selected>능력치 균형</option>
+              <option value="gender">남녀 균형</option>
+              <option value="both">남녀 + 능력치 균형</option>
+            </select>
+          </div>
+          <div class="field"><label for="captainMode">팀장</label>
+            <select id="captainMode">
+              <option value="none">지정 안 함</option>
+              <option value="top">능력치 최고 학생</option>
+              <option value="random">팀 내 랜덤</option>
+            </select>
+          </div>
+          <button class="btn primary big" id="btnRun">🎲 배치 실행</button>
+        </div>
+        <div class="sizeinfo" id="sizeInfo"></div>
+        <div class="modehelp" id="modeHelp"></div>
+        <div class="resultbar" id="resultBar"></div>
+        <div class="teams" id="teams"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 회피 관계 -->
+  <section class="panel" style="margin-top:16px">
+    <div class="panel-head"><h2>회피 관계 <span class="badge" id="avoidBadge">0쌍</span></h2><span class="hint">지정한 두 학생은 같은 팀에 배치되지 않습니다</span></div>
+    <div class="panel-body">
+      <div class="avoidlist" id="avoidList"></div>
+      <div class="pairform">
+        <select id="avoidA"></select><span>↔</span><select id="avoidB"></select>
+        <button class="btn sm" id="btnAddAvoid">추가</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="studentView" class="student" hidden></div>
+<div id="toast" class="toast" role="status"></div>
+<div id="modalHost"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+(function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const TEAM_COLORS=12;
+const uid=()=>Math.random().toString(36).slice(2,10);
+
+/* ───────── 상태 ───────── */
+let classes=[];          // [{id,name,order,students:[],avoid:[],teamCount,mode,captainMode,teams:null,teamNames:[],updatedAt}]
+let curId=null;
+let db=null, downloads=null, canWrite=true;
+let unsub=null;
+const pendingSave=new Map(); // classId -> timer
+
+const newClass=(name)=>({id:uid(),name,order:Date.now(),students:[],avoid:[],teamCount:4,mode:'ability',captainMode:'none',teams:null,teamNames:[],updatedAt:Date.now()});
+const newStudent=(num,name,gender,ability)=>({id:uid(),num:num||'',name:name||'',gender:gender||'',ability:ability||3,fixed:0,present:true});
+const cur=()=>classes.find(c=>c.id===curId);
+
+/* ───────── 저장 (Firebase: 로그인하면 클라우드, 아니면 브라우저) ───────── */
+const LS='pe-team-builder-v1';
+const FB_CONFIG={apiKey:"AIzaSyCt8B1VKA7kOaWhI-K1yy7fYEr0359uO18",authDomain:"pe-team-builder.firebaseapp.com",projectId:"pe-team-builder",storageBucket:"pe-team-builder.firebasestorage.app",messagingSenderId:"400305479648",appId:"1:400305479648:web:8e0d6c0245579cb9f61585"};
+let fbUser=null, fdb=null, colRef=null;
+function setStatus(t,cls){const s=$('#status');s.textContent=t;s.className='status '+(cls||'')}
+function lsLoad(){try{const r=localStorage.getItem(LS);return r?JSON.parse(r):null}catch(e){return null}}
+function lsSave(){try{localStorage.setItem(LS,JSON.stringify(classes))}catch(e){}}
+
+function scheduleSave(c){
+  c.updatedAt=Date.now();
+  lsSave();
+  if(!colRef){setStatus('이 브라우저에만 저장됨 (로그인하면 클라우드 저장)');return}
+  setStatus('저장 중…','saving');
+  clearTimeout(pendingSave.get(c.id));
+  pendingSave.set(c.id,setTimeout(async()=>{
+    try{
+      const body=JSON.parse(JSON.stringify(c));
+      await colRef.doc(c.id).set(body);
+      pendingSave.delete(c.id);
+      setStatus('클라우드에 저장됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+    }catch(e){
+      pendingSave.delete(c.id);
+      setStatus('저장 실패: '+(e&&e.message||e),'err');
+    }
+  },600));
+}
+async function deleteClassRemote(id){
+  if(!colRef)return;
+  try{await colRef.doc(id).delete()}catch(e){}
+}
+
+function renderAuth(){
+  const b=$('#btnAuth');const who=$('#authWho');
+  if(fbUser){b.textContent='로그아웃';who.textContent=fbUser.displayName||fbUser.email||'';who.hidden=false}
+  else{b.textContent='Google 로그인';who.hidden=true}
+}
+function applyRemoteSnapshot(snap){
+  const remote=snap.docs.map(d=>d.data());
+  if(remote.length===0){
+    if(!snap.metadata.fromCache){
+      if(classes.length){classes.forEach(c=>scheduleSave(c))} // 로컬 데이터 최초 업로드
+      else{classes=[newClass('1반')];curId=classes[0].id;scheduleSave(classes[0])}
+      renderAll();
+    }
+    return;
+  }
+  const merged=[];let changed=false;
+  for(const r of remote){
+    const l=classes.find(c=>c.id===r.id);
+    if(l&&((l.updatedAt||0)>=(r.updatedAt||0)||pendingSave.has(l.id))) merged.push(l);
+    else{merged.push(r);changed=true}
+  }
+  for(const l of classes){if(!merged.find(m=>m.id===l.id)&&pendingSave.has(l.id))merged.push(l)}
+  if(merged.length!==classes.length)changed=true;
+  classes=merged.sort((a,b)=>(a.order||0)-(b.order||0));
+  if(!cur()){curId=classes[0]?classes[0].id:null;changed=true}
+  lsSave();
+  if(!snap.metadata.hasPendingWrites)setStatus('클라우드에 저장됨');
+  const typing=document.activeElement&&document.activeElement.closest&&document.activeElement.closest('#rosterWrap,#teams');
+  if(changed&&!typing)renderAll();
+}
+async function initStore(){
+  const local=lsLoad();
+  if(local&&local.length){classes=local;curId=classes[0].id}
+  else{classes=[newClass('1반')];curId=classes[0].id;lsSave()}
+  setStatus('이 브라우저에만 저장됨 (로그인하면 클라우드 저장)');
+  renderAll();
+  if(typeof firebase==='undefined'){renderAuth();$('#btnAuth').hidden=true;return}
+  try{
+    firebase.initializeApp(FB_CONFIG);
+    fdb=firebase.firestore();
+    try{await fdb.enablePersistence({synchronizeTabs:true})}catch(e){}
+    const auth=firebase.auth();
+    try{await auth.getRedirectResult()}catch(e){toast('로그인 실패: '+(e.message||e.code))}
+    auth.onAuthStateChanged(user=>{
+      fbUser=user;renderAuth();
+      if(unsub){unsub();unsub=null}
+      if(!user){colRef=null;setStatus('이 브라우저에만 저장됨 (로그인하면 클라우드 저장)');return}
+      colRef=fdb.collection('teachers').doc(user.uid).collection('classes');
+      setStatus('클라우드 동기화 중…','saving');
+      unsub=colRef.orderBy('order').onSnapshot({includeMetadataChanges:true},applyRemoteSnapshot,err=>{setStatus('동기화 오류: '+err.code,'err')});
+    });
+    $('#btnAuth').onclick=async()=>{
+      if(fbUser){await auth.signOut();toast('로그아웃했습니다');return}
+      const provider=new firebase.auth.GoogleAuthProvider();
+      try{await auth.signInWithPopup(provider)}
+      catch(e){
+        if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment'))auth.signInWithRedirect(provider);
+        else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('로그인 실패: '+(e.message||e.code));
+      }
+    };
+  }catch(e){setStatus('Firebase 초기화 실패: '+(e.message||e),'err')}
+}
+
+/* ───────── 렌더 ───────── */
+function renderAll(){renderClassbar();renderRoster();renderAvoid();renderSettings();renderTeams();}
+
+function renderClassbar(){
+  const bar=$('#classbar');bar.innerHTML='';
+  for(const c of classes){
+    const b=document.createElement('button');b.className='classtab'+(c.id===curId?' on':'');b.textContent=c.name;
+    b.onclick=()=>{curId=c.id;renderAll()};bar.appendChild(b);
+  }
+  const add=document.createElement('button');add.className='classtab add';add.textContent='+ 반 추가';
+  add.onclick=()=>askText('새 반 이름','예: 2학년 3반',(name)=>{if(!name)return;const c=newClass(name);classes.push(c);curId=c.id;scheduleSave(c);renderAll()});
+  bar.appendChild(add);
+}
+
+function starHTML(v){let h='<span class="stars">';for(let i=1;i<=5;i++)h+=`<button data-star="${i}" class="${i<=v?'on':''}" aria-label="능력치 ${i}">★</button>`;return h+'</span>'}
+
+function renderRoster(){
+  const c=cur();const w=$('#rosterWrap');
+  if(!c){w.innerHTML='';return}
+  $('#cntBadge').textContent=c.students.filter(s=>s.present).length+'명 출석 / '+c.students.length+'명';
+  if(!c.students.length){
+    w.innerHTML='<div class="empty"><b>학생이 없습니다</b>「엑셀 업로드」로 명단을 불러오거나 「+ 학생」으로 직접 추가하세요.<br>양식: 번호 · 이름 · 성별(남/여) · 능력치(1~5, 선택)</div>';return;
+  }
+  const tc=c.teamCount||4;
+  let fixOpts=(v)=>{let h=`<option value="0" ${!v?'selected':''}>—</option>`;for(let i=1;i<=tc;i++)h+=`<option value="${i}" ${v===i?'selected':''}>${teamName(c,i-1)}</option>`;return h};
+  let rows=c.students.map((s,i)=>`<tr data-i="${i}" class="${s.present?'':'absent'}">
+    <td class="w-att"><input type="checkbox" class="chk" data-f="present" ${s.present?'checked':''} title="출석"></td>
+    <td class="w-num"><input type="text" class="num" data-f="num" value="${esc(s.num)}" inputmode="numeric"></td>
+    <td class="w-name"><input type="text" data-f="name" value="${esc(s.name)}" placeholder="이름"></td>
+    <td class="w-sex"><select data-f="gender"><option value="" ${!s.gender?'selected':''}>—</option><option value="남" ${s.gender==='남'?'selected':''}>남</option><option value="여" ${s.gender==='여'?'selected':''}>여</option></select></td>
+    <td class="w-abil">${starHTML(s.ability)}</td>
+    <td class="w-fix"><select data-f="fixed" title="고정 배치">${fixOpts(s.fixed)}</select></td>
+    <td class="w-del"><button class="iconbtn" data-del aria-label="삭제">✕</button></td>
+  </tr>`).join('');
+  w.innerHTML=`<table><thead><tr><th>출석</th><th>번호</th><th>이름</th><th>성별</th><th>능력치</th><th>고정팀</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+
+$('#rosterWrap').addEventListener('input',e=>{
+  const tr=e.target.closest('tr');if(!tr)return;const c=cur();const s=c.students[+tr.dataset.i];const f=e.target.dataset.f;if(!f)return;
+  if(f==='present'){s.present=e.target.checked;tr.classList.toggle('absent',!s.present)}
+  else if(f==='fixed'){s.fixed=+e.target.value}
+  else s[f]=e.target.value;
+  scheduleSave(c);
+  if(f==='present'||f==='name')renderAvoidSelects(),$('#cntBadge').textContent=c.students.filter(x=>x.present).length+'명 출석 / '+c.students.length+'명';
+});
+$('#rosterWrap').addEventListener('click',e=>{
+  const tr=e.target.closest('tr');if(!tr)return;const c=cur();const s=c.students[+tr.dataset.i];
+  if(e.target.dataset.star){s.ability=+e.target.dataset.star;scheduleSave(c);tr.querySelector('.w-abil').innerHTML=starHTML(s.ability);return}
+  if(e.target.hasAttribute('data-del')){
+    c.students.splice(+tr.dataset.i,1);c.avoid=c.avoid.filter(p=>p[0]!==s.id&&p[1]!==s.id);c.teams=null;scheduleSave(c);renderAll();
+  }
+});
+$('#btnAddStu').onclick=()=>{const c=cur();if(!c)return;const nums=c.students.map(s=>+s.num).filter(n=>n>0);c.students.push(newStudent(String((nums.length?Math.max(...nums):0)+1),'','' ,3));scheduleSave(c);renderRoster();renderAvoidSelects();
+  const inputs=$('#rosterWrap').querySelectorAll('input[data-f=name]');if(inputs.length)inputs[inputs.length-1].focus()};
+
+/* ───────── 회피 ───────── */
+function renderAvoid(){
+  const c=cur();const l=$('#avoidList');if(!c){l.innerHTML='';return}
+  $('#avoidBadge').textContent=c.avoid.length+'쌍';
+  l.innerHTML=c.avoid.length?c.avoid.map((p,i)=>`<span class="pair">${esc(sname(c,p[0]))} <span style="color:var(--muted)">↔</span> ${esc(sname(c,p[1]))}<button class="x" data-i="${i}" aria-label="삭제">✕</button></span>`).join(''):'<span class="hint">아직 지정된 회피 관계가 없습니다.</span>';
+  renderAvoidSelects();
+}
+function sname(c,id){const s=c.students.find(x=>x.id===id);return s?(s.num?s.num+' ':'')+s.name:'(삭제된 학생)'}
+function renderAvoidSelects(){
+  const c=cur();if(!c)return;
+  const opts='<option value="">학생 선택</option>'+c.students.filter(s=>s.name).map(s=>`<option value="${s.id}">${esc((s.num?s.num+' ':'')+s.name)}</option>`).join('');
+  $('#avoidA').innerHTML=opts;$('#avoidB').innerHTML=opts;
+}
+$('#avoidList').addEventListener('click',e=>{if(e.target.dataset.i!=null){const c=cur();c.avoid.splice(+e.target.dataset.i,1);scheduleSave(c);renderAvoid()}});
+$('#btnAddAvoid').onclick=()=>{const c=cur();const a=$('#avoidA').value,b=$('#avoidB').value;if(!a||!b||a===b){toast('서로 다른 두 학생을 선택하세요');return}
+  if(c.avoid.some(p=>(p[0]===a&&p[1]===b)||(p[0]===b&&p[1]===a))){toast('이미 등록된 관계입니다');return}
+  c.avoid.push([a,b]);scheduleSave(c);renderAvoid()};
+
+/* ───────── 설정 ───────── */
+const MODE_HELP={random:'출석 학생을 무작위로 나눕니다. 고정 배치와 회피 관계는 항상 지켜집니다.',
+  ability:'능력치(★) 합이 팀마다 비슷해지도록 지그재그(스네이크) 방식으로 배치합니다. 같은 능력치끼리는 순서를 섞어 매번 다른 결과가 나옵니다.',
+  gender:'각 팀의 남/여 인원이 고르게 되도록 성별별로 나눠 배치합니다. 능력치는 고려하지 않습니다.',
+  both:'남/여 인원을 먼저 고르게 나누고, 각 성별 안에서 능력치 순으로 스네이크 배치해 두 조건을 함께 맞춥니다.'};
+function renderSettings(){
+  const c=cur();if(!c)return;
+  $('#teamCount').value=c.teamCount||4;$('#mode').value=c.mode||'ability';$('#captainMode').value=c.captainMode||'none';
+  $('#modeHelp').textContent=MODE_HELP[$('#mode').value];
+  const n=c.students.filter(s=>s.present).length,t=c.teamCount||4;
+  $('#sizeInfo').textContent=n?`출석 ${n}명 ÷ ${t}팀 → 팀당 ${Math.floor(n/t)}${n%t?'~'+Math.ceil(n/t):''}명`:'';
+}
+function setTeamCount(v){const c=cur();if(!c)return;v=Math.max(2,Math.min(12,v|0));c.teamCount=v;scheduleSave(c);renderSettings();renderRoster()}
+$('#tcMinus').onclick=()=>setTeamCount((cur().teamCount||4)-1);
+$('#tcPlus').onclick=()=>setTeamCount((cur().teamCount||4)+1);
+$('#teamCount').onchange=e=>setTeamCount(+e.target.value);
+$('#mode').onchange=e=>{const c=cur();c.mode=e.target.value;scheduleSave(c);renderSettings()};
+$('#captainMode').onchange=e=>{const c=cur();c.captainMode=e.target.value;scheduleSave(c)};
+
+/* ───────── 배치 알고리즘 ───────── */
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function violations(teams,avoidSet){let v=0;for(const t of teams){for(let i=0;i<t.length;i++)for(let j=i+1;j<t.length;j++){if(avoidSet.has(t[i].id+'|'+t[j].id))v++}}return v}
+function abilitySpread(teams){const sums=teams.map(t=>t.reduce((a,s)=>a+(+s.ability||3),0));return Math.max(...sums)-Math.min(...sums)}
+function genderSpread(teams){let sp=0;for(const g of ['남','여']){const cnt=teams.map(t=>t.filter(s=>s.gender===g).length);sp+=Math.max(...cnt)-Math.min(...cnt)}return sp}
+function sizeSpread(teams){const n=teams.map(t=>t.length);return Math.max(...n)-Math.min(...n)}
+
+// 스네이크 배치: 이미 채워진 팀 크기를 고려해 가장 인원이 적은 팀부터, 동수면 능력치 합이 낮은 팀 우선
+function snakeFill(teams,pool,byAbility){
+  const list=byAbility?pool.slice().sort((a,b)=>(b.ability-a.ability)||(Math.random()-.5)):shuffle(pool.slice());
+  for(const s of list){
+    let best=0,bk=Infinity;
+    const order=shuffle(teams.map((_,i)=>i));
+    for(const i of order){
+      const t=teams[i];const size=t.length;const sum=t.reduce((a,x)=>a+(+x.ability||3),0);
+      const k=size*1000+(byAbility?sum:0);
+      if(k<bk){bk=k;best=i}
+    }
+    teams[best].push(s);
+  }
+}
+function buildOnce(c){
+  const T=c.teamCount||4;
+  const teams=Array.from({length:T},()=>[]);
+  const present=c.students.filter(s=>s.present&&s.name);
+  const free=[];
+  for(const s of present){ if(s.fixed>=1&&s.fixed<=T) teams[s.fixed-1].push(s); else free.push(s); }
+  const mode=c.mode||'ability';
+  if(mode==='random') snakeFill(teams,free,false);
+  else if(mode==='ability') snakeFill(teams,free,true);
+  else{
+    const byAb=mode==='both';
+    const groups={};for(const s of free){(groups[s.gender||'?']=groups[s.gender||'?']||[]).push(s)}
+    // 성별 그룹별로 채우되, 그룹 안에서만 인원 균형을 보기 위해 임시 카운트 사용
+    for(const g of Object.keys(groups).sort()){
+      const pool=byAb?groups[g].slice().sort((a,b)=>(b.ability-a.ability)||(Math.random()-.5)):shuffle(groups[g].slice());
+      for(const s of pool){
+        let best=0,bk=Infinity;const order=shuffle(teams.map((_,i)=>i));
+        for(const i of order){const t=teams[i];const gc=t.filter(x=>(x.gender||'?')===g).length;const sum=t.reduce((a,x)=>a+(+x.ability||3),0);
+          const k=gc*100000+t.length*1000+(byAb?sum:0);if(k<bk){bk=k;best=i}}
+        teams[best].push(s);
+      }
+    }
+  }
+  return teams;
+}
+function repairAvoid(teams,avoidSet){
+  // 위반 쌍 중 한 명을 다른 팀의 비고정 학생과 교환해 해소 시도
+  for(let iter=0;iter<200;iter++){
+    let found=null;
+    outer:for(let ti=0;ti<teams.length;ti++){const t=teams[ti];for(let i=0;i<t.length;i++)for(let j=i+1;j<t.length;j++)if(avoidSet.has(t[i].id+'|'+t[j].id)){found=[ti,t[j].fixed?i:j];break outer}}
+    if(!found)return true;
+    const [ti,si]=found;const s=teams[ti][si];if(s.fixed)return false;
+    const cands=shuffle(teams.map((_,i)=>i).filter(i=>i!==ti));let done=false;
+    for(const oi of cands){
+      const o=teams[oi];
+      for(let k=0;k<o.length&&!done;k++){
+        const x=o[k];if(x.fixed)continue;
+        // 교환 후 두 팀에 위반이 없으면 채택
+        const nt=teams[ti].slice();nt[si]=x;const no=o.slice();no[k]=s;
+        if(violations([nt,no],avoidSet)===0){teams[ti]=nt;teams[oi]=no;done=true}
+      }
+      if(done)break;
+    }
+    if(!done)return false;
+  }
+  return violations(teams,avoidSet)===0;
+}
+function runAssignment(){
+  const c=cur();if(!c)return;
+  const present=c.students.filter(s=>s.present&&s.name);
+  if(present.length<2){toast('출석한 학생이 2명 이상 필요합니다');return}
+  const avoidSet=new Set();for(const [a,b] of c.avoid){avoidSet.add(a+'|'+b);avoidSet.add(b+'|'+a)}
+  let best=null,bestScore=Infinity;
+  const mode=c.mode||'ability';
+  for(let r=0;r<60;r++){
+    const teams=buildOnce(c);
+    repairAvoid(teams,avoidSet);
+    const v=violations(teams,avoidSet);
+    const score=v*1e6+sizeSpread(teams)*1e4+(mode==='gender'||mode==='both'?genderSpread(teams)*100:0)+(mode==='ability'||mode==='both'?abilitySpread(teams):0);
+    if(score<bestScore){bestScore=score;best=teams}
+    if(score===0&&mode==='random')break;
+  }
+  // 팀장
+  const cm=c.captainMode||'none';
+  const captains={};
+  if(cm!=='none'){for(const t of best){if(!t.length)continue;const pick=cm==='top'?t.slice().sort((a,b)=>b.ability-a.ability||Math.random()-.5)[0]:t[Math.floor(Math.random()*t.length)];captains[pick.id]=true}}
+  c.teams=best.map(t=>t.map(s=>s.id));
+  c.captains=captains;
+  c.lastViolations=violations(best,avoidSet);
+  scheduleSave(c);renderTeams();
+  toast(c.lastViolations?`배치 완료 — 회피 관계 ${c.lastViolations}쌍은 해소하지 못했습니다`:'배치 완료');
+}
+$('#btnRun').onclick=runAssignment;
+$('#btnClearTeams').onclick=()=>{const c=cur();if(!c)return;c.teams=null;c.captains={};scheduleSave(c);renderTeams()};
+
+/* ───────── 팀 렌더 ───────── */
+function teamName(c,i){return (c.teamNames&&c.teamNames[i])||(i+1)+'팀'}
+function teamColor(i){return `var(--t${(i%TEAM_COLORS)+1})`}
+function resolvedTeams(c){if(!c||!c.teams)return null;const map=new Map(c.students.map(s=>[s.id,s]));return c.teams.map(t=>t.map(id=>map.get(id)).filter(Boolean))}
+function renderTeams(){
+  const c=cur();const host=$('#teams');const bar=$('#resultBar');
+  if(!c||!c.teams){host.innerHTML='<div class="empty" style="grid-column:1/-1"><b>아직 편성 결과가 없습니다</b>팀 수와 배치 방식을 정하고 「배치 실행」을 누르세요.</div>';bar.innerHTML='';return}
+  const teams=resolvedTeams(c);
+  const avoidSet=new Set();for(const [a,b] of c.avoid){avoidSet.add(a+'|'+b);avoidSet.add(b+'|'+a)}
+  const v=violations(teams,avoidSet);
+  bar.innerHTML=`<span class="badge ${v?'bad':'ok'}">${v?'회피 위반 '+v+'쌍':'회피 관계 모두 충족'}</span><span class="badge">능력치 합 차이 ${abilitySpread(teams)}</span><span class="badge">남녀 편차 ${genderSpread(teams)}</span><span class="hint">학생을 끌어서 다른 팀 카드에 놓거나, 이름 옆 ↔ 로 옮길 수 있습니다. 팀 인원이 달라도 됩니다. 팀 이름은 클릭해 수정.</span>`;
+  host.innerHTML=teams.map((t,i)=>{
+    const sum=t.reduce((a,s)=>a+(+s.ability||3),0);const m=t.filter(s=>s.gender==='남').length,f=t.filter(s=>s.gender==='여').length;
+    return `<div class="team" data-t="${i}"><div class="team-head" style="background:${teamColor(i)}"><input class="tname" data-t="${i}" value="${esc(teamName(c,i))}" aria-label="팀 이름"><span class="team-meta num">${t.length}명 · ★${sum}${(m||f)?` · 남${m} 여${f}`:''}</span></div>
+    <ul>${t.map(s=>`<li data-s="${s.id}" draggable="true"><span class="nm">${s.num?`<span class="num" style="color:var(--muted);font-size:11px">${esc(s.num)}</span> `:''}${esc(s.name)}${s.fixed?' <span class="badge" title="고정 배치">고정</span>':''}</span>${c.captains&&c.captains[s.id]?'<span class="cap">팀장</span>':''}<span class="ab">★${s.ability}</span><button class="mv" title="다른 팀으로">↔</button></li>`).join('')||'<li class="hint">비어 있음</li>'}</ul></div>`;
+  }).join('');
+}
+$('#teams').addEventListener('change',e=>{
+  if(e.target.classList.contains('tname')){const c=cur();c.teamNames=c.teamNames||[];c.teamNames[+e.target.dataset.t]=e.target.value.trim();scheduleSave(c);renderRoster();return}
+  if(e.target.classList.contains('mvsel')){const li=e.target.closest('li');moveStudent(li.dataset.s,+e.target.value)}
+});
+function moveStudent(sid,to){
+  const c=cur();if(!c||!c.teams||!c.teams[to])return;
+  if(c.teams[to].includes(sid)){renderTeams();return}
+  c.teams=c.teams.map(t=>t.filter(id=>id!==sid));c.teams[to].push(sid);
+  const s=c.students.find(x=>x.id===sid);if(s&&s.fixed)s.fixed=0; // 수기로 옮기면 고정 해제
+  scheduleSave(c);renderTeams();renderRoster();
+}
+// 드래그 앤 드롭
+let dragSid=null;
+$('#teams').addEventListener('dragstart',e=>{const li=e.target.closest('li[data-s]');if(!li)return;dragSid=li.dataset.s;li.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',dragSid)}catch(err){}});
+$('#teams').addEventListener('dragend',e=>{dragSid=null;$('#teams').querySelectorAll('.dragging,.dropok').forEach(el=>el.classList.remove('dragging','dropok'))});
+$('#teams').addEventListener('dragover',e=>{const team=e.target.closest('.team');if(!team||!dragSid)return;e.preventDefault();e.dataTransfer.dropEffect='move';$('#teams').querySelectorAll('.dropok').forEach(el=>{if(el!==team)el.classList.remove('dropok')});team.classList.add('dropok')});
+$('#teams').addEventListener('dragleave',e=>{const team=e.target.closest('.team');if(team&&!team.contains(e.relatedTarget))team.classList.remove('dropok')});
+$('#teams').addEventListener('drop',e=>{const team=e.target.closest('.team');if(!team||!dragSid)return;e.preventDefault();const sid=dragSid;dragSid=null;moveStudent(sid,+team.dataset.t)});
+$('#teams').addEventListener('click',e=>{
+  if(e.target.classList.contains('mv')){const c=cur();const li=e.target.closest('li');const ti=[...$('#teams').children].indexOf(li.closest('.team'));
+    const sel=document.createElement('select');sel.className='mvsel';sel.innerHTML=c.teams.map((_,i)=>`<option value="${i}" ${i===ti?'selected':''}>${esc(teamName(c,i))}</option>`).join('');
+    e.target.replaceWith(sel);sel.focus();sel.onblur=()=>renderTeams()}
+});
+
+/* ───────── 학생 화면 ───────── */
+$('#btnStudent').onclick=()=>{
+  const c=cur();if(!c||!c.teams){toast('먼저 배치를 실행하세요');return}
+  const teams=resolvedTeams(c);const sv=$('#studentView');
+  const cols=teams.length<=3?teams.length:teams.length<=8?4:6;
+  sv.style.setProperty('--cols',cols);
+  sv.innerHTML=`<div class="student-top"><h2><span>${esc(c.name)}</span> 팀 편성</h2><div style="display:flex;gap:8px"><button class="btn" id="svReshuffle">🎲 다시 뽑기</button><button class="btn primary" id="svClose">교사 화면으로</button></div></div>
+  <div class="sgrid">${teams.map((t,i)=>`<div class="steam"><div class="steam-head" style="background:${teamColor(i)}">${esc(teamName(c,i))}<small>${t.length}명</small></div><ol>${t.map((s,k)=>`<li class="${c.captains&&c.captains[s.id]?'cap':''}"><span class="n num">${esc(s.num)}</span>${esc(s.name)}</li>`).join('')}</ol></div>`).join('')}</div>`;
+  sv.hidden=false;document.body.style.overflow='hidden';
+  $('#svClose').onclick=()=>{sv.hidden=true;document.body.style.overflow=''};
+  $('#svReshuffle').onclick=()=>{runAssignment();$('#btnStudent').click()};
+  if(document.documentElement.requestFullscreen){document.documentElement.requestFullscreen().catch(()=>{})}
+};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#studentView').hidden){$('#studentView').hidden=true;document.body.style.overflow=''}});
+
+/* ───────── 엑셀 ───────── */
+$('#btnImport').onclick=()=>$('#fileInput').click();
+$('#fileInput').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;const c=cur();if(!c)return;
+  const rd=new FileReader();
+  rd.onload=ev=>{
+    try{
+      const wb=XLSX.read(ev.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const parsed=parseRows(rows);
+      if(!parsed.length){toast('이름 열을 찾지 못했습니다. 첫 행에 「번호, 이름, 성별, 능력치」를 두세요');return}
+      confirmBox('명단 불러오기',`${parsed.length}명을 읽었습니다. 현재 명단을 이 목록으로 바꿀까요? (회피 관계·편성 결과는 초기화됩니다)`,'바꾸기',()=>{
+        c.students=parsed;c.avoid=[];c.teams=null;c.captains={};scheduleSave(c);renderAll();toast(parsed.length+'명 불러옴');
+      },'추가하기',()=>{
+        c.students=c.students.concat(parsed);c.teams=null;scheduleSave(c);renderAll();toast(parsed.length+'명 추가');
+      });
+    }catch(err){toast('파일을 읽지 못했습니다: '+err.message)}
+    e.target.value='';
+  };
+  rd.readAsArrayBuffer(f);
+};
+function parseRows(rows){
+  if(!rows.length)return[];
+  const norm=s=>String(s).replace(/\s/g,'').toLowerCase();
+  let head=rows[0].map(norm);
+  let iNum=head.findIndex(h=>/번호|no|num|출석/.test(h)),iName=head.findIndex(h=>/이름|성명|name/.test(h)),iSex=head.findIndex(h=>/성별|sex|gender/.test(h)),iAb=head.findIndex(h=>/능력|실력|수준|level|ability|점수/.test(h));
+  let start=1;
+  if(iName<0){ // 헤더 없음: 첫 열이 숫자면 번호, 다음 열 이름
+    const r=rows[0];if(r.length>=2&&/^\d+$/.test(String(r[0]).trim())){iNum=0;iName=1;iSex=2;iAb=3;start=0}
+    else if(r.length>=1&&String(r[0]).trim()&&!/^\d+$/.test(String(r[0]).trim())){iName=0;iNum=-1;iSex=1;iAb=2;start=0}
+    else return[];
+  }
+  const out=[];
+  for(let i=start;i<rows.length;i++){
+    const r=rows[i];const name=String(iName>=0?r[iName]:'').trim();if(!name)continue;
+    const g=String(iSex>=0?r[iSex]:'').trim();const gender=/^(남|m|male|1)$/i.test(g)?'남':/^(여|f|female|2)$/i.test(g)?'여':'';
+    let ab=parseInt(iAb>=0?r[iAb]:'',10);if(!(ab>=1&&ab<=5))ab=3;
+    out.push(newStudent(String(iNum>=0?r[iNum]:'').trim().replace(/\.0$/,''),name,gender,ab));
+  }
+  return out;
+}
+async function saveWorkbook(wb,filename){
+  const data=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  if(downloads){
+    try{await downloads.save({filename,data:new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})});toast('저장했습니다')}
+    catch(e){if(e&&e.code!=='cancelled')toast('저장 실패: '+(e.message||e.code))}
+  }else{
+    try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data]));a.download=filename;document.body.appendChild(a);a.click();a.remove()}catch(e){toast('이 환경에서는 파일 저장이 지원되지 않습니다')}
+  }
+}
+$('#btnTemplate').onclick=()=>{
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([['번호','이름','성별','능력치'],[1,'홍길동','남',3],[2,'김영희','여',4],[3,'',' ','']]);
+  ws['!cols']=[{wch:6},{wch:12},{wch:6},{wch:8}];
+  XLSX.utils.book_append_sheet(wb,ws,'명단');saveWorkbook(wb,'팀편성_명단양식.xlsx');
+};
+$('#btnExport').onclick=()=>{
+  const c=cur();if(!c)return;
+  const wb=XLSX.utils.book_new();
+  const teams=resolvedTeams(c);const tOf={};if(teams)teams.forEach((t,i)=>t.forEach(s=>tOf[s.id]=teamName(c,i)));
+  const ws=XLSX.utils.aoa_to_sheet([['번호','이름','성별','능력치','출석','고정팀','배정팀','팀장'],...c.students.map(s=>[s.num,s.name,s.gender,s.ability,s.present?'O':'X',s.fixed?teamName(c,s.fixed-1):'',tOf[s.id]||'',c.captains&&c.captains[s.id]?'O':''])]);
+  ws['!cols']=[{wch:6},{wch:12},{wch:6},{wch:8},{wch:6},{wch:8},{wch:8},{wch:6}];
+  XLSX.utils.book_append_sheet(wb,ws,'명단(교사용)');
+  if(teams){
+    const maxLen=Math.max(...teams.map(t=>t.length));
+    const aoa=[teams.map((_,i)=>teamName(c,i))];
+    for(let r=0;r<maxLen;r++)aoa.push(teams.map(t=>t[r]?(t[r].num?t[r].num+' ':'')+t[r].name+(c.captains&&c.captains[t[r].id]?' (팀장)':''):''));
+    const ws2=XLSX.utils.aoa_to_sheet(aoa);ws2['!cols']=teams.map(()=>({wch:14}));
+    XLSX.utils.book_append_sheet(wb,ws2,'편성결과(게시용)');
+    if(c.avoid.length)XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['학생1','학생2'],...c.avoid.map(p=>[sname(c,p[0]),sname(c,p[1])])]),'회피관계');
+  }
+  saveWorkbook(wb,`팀편성_${c.name}_${new Date().toISOString().slice(0,10)}.xlsx`);
+};
+
+/* ───────── 반 관리 ───────── */
+$('#btnRename').onclick=()=>{const c=cur();if(!c)return;askText('반 이름 변경',c.name,(v)=>{if(!v)return;c.name=v;scheduleSave(c);renderClassbar();},c.name)};
+$('#btnDelClass').onclick=()=>{const c=cur();if(!c)return;
+  confirmBox('반 삭제',`「${c.name}」의 명단과 편성 결과를 모두 삭제합니다. 되돌릴 수 없습니다.`,'삭제',()=>{
+    classes=classes.filter(x=>x.id!==c.id);deleteClassRemote(c.id);pendingSave.delete(c.id);
+    if(!classes.length){classes=[newClass('1반')];scheduleSave(classes[0])}
+    curId=classes[0].id;lsSave();renderAll();
+  })};
+
+/* ───────── 백업 / 복원 ───────── */
+async function saveBlob(blob,filename){
+  if(downloads){try{await downloads.save({filename,data:blob});toast('저장했습니다')}catch(e){if(e&&e.code!=='cancelled')toast('저장 실패: '+(e.message||e.code))}}
+  else{try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)}catch(e){toast('이 환경에서는 파일 저장이 지원되지 않습니다')}}
+}
+$('#btnBackup').onclick=()=>{
+  const blob=new Blob([JSON.stringify({app:'pe-team-builder',version:1,exportedAt:new Date().toISOString(),classes},null,1)],{type:'application/json'});
+  saveBlob(blob,`팀편성_백업_${new Date().toISOString().slice(0,10)}.json`);
+};
+$('#btnRestore').onclick=()=>$('#restoreInput').click();
+$('#restoreInput').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=ev=>{
+    try{
+      const obj=JSON.parse(ev.target.result);const list=Array.isArray(obj)?obj:obj.classes;
+      if(!Array.isArray(list)||!list.every(c=>c&&c.id&&Array.isArray(c.students)))throw new Error('형식이 맞지 않습니다');
+      confirmBox('백업 복원',`${list.length}개 반을 읽었습니다. 현재 데이터를 백업 내용으로 바꿀까요?`,'바꾸기',()=>{
+        const old=classes.map(c=>c.id);
+        classes=list.map(c=>Object.assign(newClass(c.name||'반'),c,{updatedAt:Date.now()}));
+        curId=classes[0]?classes[0].id:null;lsSave();
+        old.filter(id=>!classes.find(c=>c.id===id)).forEach(deleteClassRemote);
+        classes.forEach(scheduleSave);renderAll();toast('복원했습니다');
+      },'추가하기',()=>{
+        for(const c of list){const nc=Object.assign(newClass(c.name||'반'),c,{updatedAt:Date.now()});if(classes.find(x=>x.id===nc.id))nc.id=uid();nc.order=Date.now()+classes.length;classes.push(nc);scheduleSave(nc)}
+        lsSave();renderAll();toast(list.length+'개 반 추가');
+      });
+    }catch(err){toast('복원 실패: '+err.message)}
+    e.target.value='';
+  };
+  rd.readAsText(f);
+};
+
+/* ───────── UI 유틸 ───────── */
+let toastT;function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2200)}
+function askText(title,placeholder,cb,initial){
+  const h=$('#modalHost');h.innerHTML=`<div class="modal"><div class="box"><h3>${esc(title)}</h3><input type="text" id="mInput" placeholder="${esc(placeholder)}" value="${esc(initial||'')}"><div class="row"><button class="btn" id="mCancel">취소</button><button class="btn primary" id="mOk">확인</button></div></div></div>`;
+  const inp=$('#mInput');inp.focus();inp.select();
+  const close=()=>h.innerHTML='';$('#mCancel').onclick=close;$('#mOk').onclick=()=>{const v=inp.value.trim();close();cb(v)};
+  inp.onkeydown=e=>{if(e.key==='Enter')$('#mOk').click();if(e.key==='Escape')close()};
+}
+function confirmBox(title,msg,okLabel,ok,altLabel,alt){
+  const h=$('#modalHost');h.innerHTML=`<div class="modal"><div class="box"><h3>${esc(title)}</h3><p>${esc(msg)}</p><div class="row"><button class="btn" id="mCancel">취소</button>${altLabel?`<button class="btn" id="mAlt">${esc(altLabel)}</button>`:''}<button class="btn ${okLabel==='삭제'?'danger':'primary'}" id="mOk">${esc(okLabel)}</button></div></div></div>`;
+  const close=()=>h.innerHTML='';$('#mCancel').onclick=close;$('#mOk').onclick=()=>{close();ok()};if(altLabel)$('#mAlt').onclick=()=>{close();alt()};
+}
+
+initStore();
+})();
+</script>
+
+</body>
+</html>
