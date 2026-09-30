@@ -291,6 +291,20 @@ function setStatus(t,cls){const s=$('#status');s.textContent=t;s.className='stat
 function lsLoad(){try{const r=localStorage.getItem(LS);return r?JSON.parse(r):null}catch(e){return null}}
 function lsSave(){try{localStorage.setItem(LS,JSON.stringify(classes))}catch(e){}}
 
+// Firestore는 배열 안의 배열을 허용하지 않으므로 avoid/teams를 객체 배열로 바꿔 저장
+function toFs(c){
+  const b=JSON.parse(JSON.stringify(c));
+  b.avoid=(c.avoid||[]).map(p=>({a:p[0],b:p[1]}));
+  b.teams=c.teams?c.teams.map(t=>({ids:t})):null;
+  return b;
+}
+function fromFs(d){
+  const c=Object.assign({},d);
+  c.avoid=(d.avoid||[]).map(p=>Array.isArray(p)?p:[p.a,p.b]);
+  c.teams=d.teams?d.teams.map(t=>Array.isArray(t)?t:(t.ids||[])):null;
+  c.students=d.students||[];c.teamNames=d.teamNames||[];c.captains=d.captains||{};
+  return c;
+}
 function scheduleSave(c){
   c.updatedAt=Date.now();
   lsSave();
@@ -299,7 +313,7 @@ function scheduleSave(c){
   clearTimeout(pendingSave.get(c.id));
   pendingSave.set(c.id,setTimeout(async()=>{
     try{
-      const body=JSON.parse(JSON.stringify(c));
+      const body=toFs(c);
       await colRef.doc(c.id).set(body);
       pendingSave.delete(c.id);
       setStatus('클라우드에 저장됨 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
@@ -320,7 +334,7 @@ function renderAuth(){
   else{b.textContent='Google 로그인';who.hidden=true}
 }
 function applyRemoteSnapshot(snap){
-  const remote=snap.docs.map(d=>d.data());
+  const remote=snap.docs.map(d=>fromFs(d.data()));
   if(remote.length===0){
     if(!snap.metadata.fromCache){
       if(classes.length){classes.forEach(c=>scheduleSave(c))} // 로컬 데이터 최초 업로드
